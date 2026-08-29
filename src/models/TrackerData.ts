@@ -6,6 +6,7 @@ export interface ITrackerData extends Document {
   checks: Map<string, boolean>;
   notes: Map<string, string>;
   holidays: string[];
+  startDate?: Date;
 }
 
 const TrackerDataSchema = new Schema<ITrackerData>({
@@ -14,6 +15,7 @@ const TrackerDataSchema = new Schema<ITrackerData>({
   checks: { type: Map, of: Boolean, default: {} },
   notes: { type: Map, of: String, default: {} },
   holidays: { type: [String], default: [] },
+  startDate: { type: Date },
 }, { timestamps: true });
 
 const TrackerData: Model<ITrackerData> = mongoose.models.TrackerData || mongoose.model<ITrackerData>("TrackerData", TrackerDataSchema);

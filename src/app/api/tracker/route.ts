@@ -27,7 +27,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       checks: Object.fromEntries(data.checks || new Map()),
       notes: Object.fromEntries(data.notes || new Map()),
-      holidays: data.holidays || []
+      holidays: data.holidays || [],
+      startDate: data.startDate ? data.startDate.toISOString() : null
     });
   } catch (error) {
     console.error("Error fetching tracker data:", error);
@@ -41,17 +42,17 @@ export async function POST(request: Request) {
     
     const userId = "default-user";
     const body = await request.json();
-    const { checks, notes, holidays, roadmapId } = body;
+    const { roadmapId, checks, notes, holidays, startDate } = body;
+
+    const updateData: any = {};
+    if (checks) updateData.checks = checks;
+    if (notes) updateData.notes = notes;
+    if (holidays) updateData.holidays = holidays;
+    if (startDate) updateData.startDate = new Date(startDate);
 
     const data = await TrackerData.findOneAndUpdate(
       { userId, activeRoadmapId: roadmapId || 'mern-90-day' },
-      { 
-        $set: { 
-          checks: checks || {},
-          notes: notes || {},
-          holidays: holidays || []
-        }
-      },
+      { $set: updateData },
       { returnDocument: 'after', upsert: true }
     );
 

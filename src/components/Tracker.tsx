@@ -20,15 +20,19 @@ export default function Tracker({ roadmap }: { roadmap: Roadmap }) {
   const [filter, setFilter] = useState("all");
   const [activeDay, setActiveDay] = useState<number | null>(null);
   const [searchQ, setSearchQ] = useState("");
+  const [serverStartDate, setServerStartDate] = useState<Date | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [selectedStartDate, setSelectedStartDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [isLinkingPush, setIsLinkingPush] = useState(false);
   
   const getTodayDay = useCallback(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const start = new Date(roadmap.startDate);
+    const start = new Date(serverStartDate || roadmap.startDate);
     start.setHours(0, 0, 0, 0);
     const diff = Math.floor((today.getTime() - start.getTime()) / 86400000) + 1;
     return Math.max(1, Math.min(roadmap.daysData.length, diff));
-  }, [roadmap]);
+  }, [roadmap, serverStartDate]);
 
   const todayDay = getTodayDay();
 
@@ -40,6 +44,9 @@ export default function Tracker({ roadmap }: { roadmap: Roadmap }) {
           const data = await res.json();
           setChecks(data.checks || {});
           setNotes(data.notes || {});
+          if (data.startDate) {
+            setServerStartDate(new Date(data.startDate));
+          }
         }
       } catch (err) {
         console.error("Failed to load tracker data", err);
@@ -141,6 +148,83 @@ export default function Tracker({ roadmap }: { roadmap: Roadmap }) {
     </div>
   );
 
+  const handleStartRoadmap = async () => {
+    setIsStarting(true);
+    try {
+      await fetch('/api/tracker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roadmapId: roadmap.id, startDate: selectedStartDate })
+      });
+      setServerStartDate(new Date(selectedStartDate));
+    } catch (err) {
+      console.error(err);
+    }
+    setIsStarting(false);
+  };
+
+  const enablePushNotifications = async () => {
+    setIsLinkingPush(true);
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        throw new Error("Push notifications are not supported in this browser. Are you on iOS 16.4+ with the app added to your Home Screen?");
+      }
+
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      
+      // We need the VAPID key to subscribe
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        throw new Error("VAPID Public Key is missing from environment variables.");
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidPublicKey
+      });
+
+      const res = await fetch('/api/push/subscribe', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subscription)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert("✅ Push Notifications Enabled Successfully!");
+    } catch (err: any) {
+      alert(`⚠️ ${err.message}`);
+    }
+    setIsLinkingPush(false);
+  };
+
+  if (!serverStartDate) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0f1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ background: "#111827", padding: 40, borderRadius: 16, border: "1px solid #1e293b", maxWidth: 400, width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🚀</div>
+          <h2 style={{ color: "#fff", margin: "0 0 8px 0", fontSize: 24, fontWeight: 800 }}>Start Your Journey</h2>
+          <p style={{ color: "#94a3b8", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>
+            Choose the day you want to begin this roadmap. 
+            <strong> Once started, this date cannot be changed!</strong>
+          </p>
+          <input 
+            type="date" 
+            value={selectedStartDate}
+            onChange={e => setSelectedStartDate(e.target.value)}
+            style={{ width: "100%", background: "#0d1117", border: "1px solid #334155", color: "#e2e8f0", padding: "12px", borderRadius: 8, fontSize: 16, marginBottom: 24, outline: "none", boxSizing: "border-box" }}
+          />
+          <button 
+            onClick={handleStartRoadmap}
+            disabled={isStarting || !selectedStartDate}
+            style={{ width: "100%", background: "linear-gradient(90deg, #6366f1, #8b5cf6)", color: "#fff", border: "none", padding: "14px", borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: isStarting ? "wait" : "pointer", opacity: isStarting || !selectedStartDate ? 0.7 : 1 }}
+          >
+            {isStarting ? "Locking in..." : "Start Roadmap"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "#0f1117", color: "#e2e8f0", fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* Header */}
@@ -156,16 +240,23 @@ export default function Tracker({ roadmap }: { roadmap: Roadmap }) {
                 {roadmap.description}
               </div>
             </div>
-            <div className="stats-text">
+            <div className="stats-text" style={{ textAlign: "right" }}>
               <div style={{ fontSize: 36, fontWeight: 900, color: "#818cf8" }}>{overallPct}%</div>
-              <div style={{ fontSize: 12, color: "#64748b" }}>overall complete</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>overall complete</div>
+              <button 
+                onClick={enablePushNotifications}
+                disabled={isLinkingPush}
+                style={{ background: "#38bdf820", color: "#38bdf8", border: "1px solid #38bdf850", padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}
+              >
+                {isLinkingPush ? "Enabling..." : "🔔 Enable Push Notifications"}
+              </button>
             </div>
           </div>
 
           {/* Stats row */}
           <div className="stats-grid">
             {[
-              { label: "Today", value: `Day ${todayDay}`, sub: fmt(addDays(roadmap.startDate, todayDay - 1)), color: "#6366f1" },
+              { label: "Today", value: `Day ${todayDay}`, sub: fmt(addDays(serverStartDate || roadmap.startDate, todayDay - 1)), color: "#6366f1" },
               { label: "Days Complete", value: `${completedDays}/${roadmap.daysData.length}`, sub: "all tasks done", color: "#10b981" },
               ...(key1 ? [{ label: roadmap.sectionMeta[key1]?.label || key1, value: `${key1Done}/${roadmap.daysData.length}`, sub: "completed", color: roadmap.sectionMeta[key1]?.color || "#f59e0b" }] : []),
               ...(key2 ? [{ label: roadmap.sectionMeta[key2]?.label || key2, value: `${key2Done}/${roadmap.daysData.length}`, sub: "completed", color: roadmap.sectionMeta[key2]?.color || "#0ea5e9" }] : []),
@@ -228,7 +319,7 @@ export default function Tracker({ roadmap }: { roadmap: Roadmap }) {
             const isToday = d.day === todayDay;
             const isOpen = activeDay === d.day;
             const isComplete = pct === 100;
-            const date = addDays(roadmap.startDate, d.day - 1);
+            const date = addDays(serverStartDate || roadmap.startDate, d.day - 1);
 
             return (
               <div key={d.day}

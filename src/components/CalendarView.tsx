@@ -12,6 +12,7 @@ export default function CalendarView({
 }) {
   const [date, setDate] = useState<Date>(new Date());
   const [holidays, setHolidays] = useState<string[]>([]);
+  const [serverStartDate, setServerStartDate] = useState<Date | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -21,6 +22,9 @@ export default function CalendarView({
         if (res.ok) {
           const data = await res.json();
           setHolidays(data.holidays || []);
+          if (data.startDate) {
+            setServerStartDate(new Date(data.startDate));
+          }
         }
       } catch (err) {
         console.error("Failed to load holidays", err);
@@ -69,9 +73,9 @@ export default function CalendarView({
   };
 
   const getTileContent = ({ date, view }: { date: Date; view: string }) => {
-    if (view !== "month") return null;
+    if (view !== "month" || !serverStartDate) return null;
 
-    const start = new Date(roadmap.startDate);
+    const start = new Date(serverStartDate);
     start.setHours(0, 0, 0, 0);
     const curr = new Date(date);
     curr.setHours(0, 0, 0, 0);
@@ -93,6 +97,18 @@ export default function CalendarView({
       <div style={{ color: "#6366f1", fontFamily: "monospace", fontSize: 18 }}>Loading calendar…</div>
     </div>
   );
+
+  if (!serverStartDate) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0f1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", color: "#94a3b8" }}>
+        <div>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🗓️</div>
+          <h2 style={{ color: "#fff", marginBottom: 8 }}>Roadmap Not Started</h2>
+          <p>Please switch back to the Tracker view to pick your Start Date first.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "80px 24px", maxWidth: 900, margin: "0 auto", color: "#e2e8f0" }}>

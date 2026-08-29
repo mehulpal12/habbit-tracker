@@ -11,12 +11,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en" suppressHydrationWarning={true}>
-      <body className={inter.className} suppressHydrationWarning={true}>{children}</body>
+    <html lang="en" suppressHydrationWarning={true} suppressContentEditableWarning={true}>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#6366f1" />
+      </head>
+      <body className={inter.className} suppressHydrationWarning={true} suppressContentEditableWarning={true}>
+        {children}
+      </body>
     </html>
   );
 }
